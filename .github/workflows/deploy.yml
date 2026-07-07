@@ -1,0 +1,101 @@
+name: Validate and Deploy to Adobe Target MCP
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-target-mcp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-new-activity:
+    name: Validate activity changes
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Check for activity create or update changes
+        env:
+          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/check_new_activity_folder.py
+
+      - name: Validate HTML, CSS, JavaScript, and formatting
+        env:
+          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/validate_activity_code.py
+
+  deploy:
+    name: Deploy to Adobe Target MCP
+    needs: validate-new-activity
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && needs.validate-new-activity.result == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare deploy SHAs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "GITHUB_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              echo "GITHUB_BEFORE_SHA=$(git rev-parse HEAD^)" >> $GITHUB_ENV
+            else
+              echo "GITHUB_BEFORE_SHA=" >> $GITHUB_ENV
+            fi
+          else
+            echo "GITHUB_SHA=${{ github.sha }}" >> $GITHUB_ENV
+            echo "GITHUB_BEFORE_SHA=${{ github.event.before }}" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy HTML offer via MCP
+        env:
+          MCP_SERVER_URL: https://targetmcp.adobe.io/mcp
+          ADOBE_ACCESS_TOKEN: ${{ secrets.ADOBE_ACCESS_TOKEN }}
+          ADOBE_CLIENT_ID: ${{ secrets.ADOBE_CLIENT_ID }}
+          ADOBE_CLIENT_SECRET: ${{ secrets.ADOBE_CLIENT_SECRET }}
+          GITHUB_BEFORE_SHA: ${{ env.GITHUB_BEFORE_SHA }}
+          GITHUB_SHA: ${{ env.GITHUB_SHA }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DEPLOY_USERNAME: adobemohit
+        run: python scripts/deploy_to_target_mcp.py

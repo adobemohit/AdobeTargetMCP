@@ -1,0 +1,26 @@
+{
+  "activity_id": 0,
+  "activity_name": "Your Activity Name",
+  "activity_description": "Describe the activity purpose. After first deploy, save activity_id and offer_id for future updates.",
+  "activity_status": "active",
+  "activity_start_date": "2026-01-01",
+  "activity_end_date": "2026-12-31",
+  "activity_type": "XT",
+  "activity_location": "home",
+  "activity_target": "users",
+  "variants": [
+    {
+      "variant": "variant_a",
+      "html_file": "your_activity_name_exp_a.html",
+      "offer_name": "Your Activity Name - Variant A",
+      "offer_id": null,
+      "mode": "create_or_update"
+    }
+  ],
+  "actions": {
+    "push_offer": true,
+    "attach_offer_to_variant": true,
+    "sync_activity_state": false,
+    "create_activity_if_missing": true
+  }
+}

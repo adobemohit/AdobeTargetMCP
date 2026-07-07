@@ -1,0 +1,52 @@
+{
+  "description": "Global deploy settings. Supports creating new activities and updating existing ones.",
+  "mcp_server_url": "https://targetmcp.adobe.io/mcp",
+  "discovery": {
+    "info_file": "activity-info.json",
+    "html_pattern": "*.html",
+    "exclude_dirs": [
+      ".github",
+      "scripts",
+      ".git",
+      "node_modules",
+      "css",
+      "js",
+      "__pycache__",
+      "_activity_template",
+      "docs",
+      "at-git-helper"
+    ],
+    "deploy_modes": [
+      "create",
+      "update"
+    ]
+  },
+  "default_actions": {
+    "push_offer": true,
+    "attach_offer_to_variant": true,
+    "sync_activity_state": false,
+    "create_activity_if_missing": true
+  },
+  "deploy_name_prefix": "[GitHub]",
+  "deploy_username": "adobemohit",
+  "validation": {
+    "check_duplicate_activity_name": true,
+    "check_duplicate_offer_name": true
+  },
+  "status_map": {
+    "active": "approved",
+    "inactive": "deactivated",
+    "paused": "paused",
+    "draft": "saved",
+    "saved": "saved"
+  },
+  "activity_type_map": {
+    "AB": "ab",
+    "XT": "xt",
+    "ABT": "abt"
+  },
+  "auth": {
+    "ims_token_url": "https://ims-na1.adobelogin.com/ims/token/v3",
+    "scopes": "openid,AdobeID,target_sdk,additional_info.roles,read_organizations,additional_info.projectedProductContext"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "activity_id": 0,
+  "activity_name": "AdobeTargetMCP Sample",
+  "activity_description": "Sample XT activity created during setup for AdobeTargetMCP.",
+  "activity_status": "active",
+  "activity_start_date": "2026-01-01",
+  "activity_end_date": "2026-12-31",
+  "activity_type": "XT",
+  "activity_location": "home",
+  "activity_target": "users",
+  "variants": [
+    {
+      "variant": "variant_a",
+      "html_file": "adobetargetmcp_sample_xt_test_exp_a.html",
+      "offer_name": "AdobeTargetMCP Sample - Variant A",
+      "offer_id": null,
+      "mode": "create_or_update"
+    }
+  ],
+  "actions": {
+    "push_offer": true,
+    "attach_offer_to_variant": true,
+    "sync_activity_state": false,
+    "create_activity_if_missing": true
+  }
+}

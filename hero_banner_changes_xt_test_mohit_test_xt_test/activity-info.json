@@ -1,5 +1,5 @@
 {
-  "activity_id": 0,
+  "activity_id": 338087,
   "activity_name": "Hero Banner Changes XT Test mohit test",
   "activity_description": "Sample XT activity to test hero banner content changes on the home page",
   "activity_status": "active",
@@ -13,7 +13,7 @@
       "variant": "variant_a",
       "html_file": "hero_banner_changes_xt_test_mohit_test_xt_test_exp_a.html",
       "offer_name": "Hero Banner Changes mohit - Variant A",
-      "offer_id": null,
+      "offer_id": 879540,
       "mode": "create_or_update"
     }
   ],

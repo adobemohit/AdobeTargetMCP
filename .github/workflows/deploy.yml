@@ -78,4 +78,6 @@ jobs:
           ADOBE_CLIENT_SECRET: ${{ secrets.ADOBE_CLIENT_SECRET }}
           GITHUB_BEFORE_SHA: ${{ github.event.before }}
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DEPLOY_USERNAME: adobemohit
         run: python scripts/deploy_to_target_mcp.py

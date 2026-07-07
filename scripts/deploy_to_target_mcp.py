@@ -273,8 +273,20 @@ def build_offer_name(activity_info: dict, variant: str) -> str:
     return f"{activity_name} - {label}"
 
 
+def get_deploy_username(config: dict) -> str:
+    return (
+        os.environ.get("DEPLOY_USERNAME", "").strip()
+        or os.environ.get("GITHUB_ACTOR", "").strip()
+        or config.get("deploy_username", "").strip()
+    )
+
+
 def get_name_prefix(config: dict) -> str:
-    return config.get("deploy_name_prefix", "[GitHub]")
+    base_prefix = config.get("deploy_name_prefix", "[GitHub]")
+    username = get_deploy_username(config)
+    if username:
+        return f"{base_prefix}[{username}]"
+    return base_prefix
 
 
 def with_name_prefix(name: str, prefix: str) -> str:

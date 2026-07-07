@@ -21,6 +21,6 @@
     "push_offer": true,
     "attach_offer_to_variant": true,
     "sync_activity_state": false,
-    "create_activity_if_missing": true
+    "create_activity_if_missing": false
   }
 }

@@ -530,8 +530,15 @@ def main() -> int:
 
     activity_folders = get_newly_added_activity_folders(config)
     if not activity_folders:
-        print("No newly created activity folders in this merge. Skipping deploy.")
-        return 0
+        print(
+            "ERROR: No newly created activity folders in this merge.",
+            file=sys.stderr,
+        )
+        print(
+            "Add a new activity folder with activity-info.json before merging to main.",
+            file=sys.stderr,
+        )
+        return 1
 
     print(
         "New activity folders to deploy: "

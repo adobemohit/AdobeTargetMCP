@@ -1,17 +1,37 @@
-name: Deploy to Adobe Target MCP
+name: Validate and Deploy to Adobe Target MCP
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
 
 concurrency:
-  group: deploy-target-mcp
+  group: deploy-target-mcp-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate-new-activity:
+    name: Validate new activity folder
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for newly created activity folder
+        env:
+          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/check_new_activity_folder.py
+
   deploy:
-    name: Push HTML to Adobe Target MCP
+    name: Deploy to Adobe Target MCP
+    needs: validate-new-activity
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     steps:

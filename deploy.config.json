@@ -13,6 +13,11 @@
     "sync_activity_state": false,
     "create_activity_if_missing": true
   },
+  "deploy_name_prefix": "[GitHub]",
+  "validation": {
+    "check_duplicate_activity_name": true,
+    "check_duplicate_offer_name": true
+  },
   "status_map": {
     "active": "approved",
     "inactive": "deactivated",

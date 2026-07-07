@@ -165,6 +165,83 @@ def extract_tool_result(response: dict) -> dict:
     return result
 
 
+class DeployValidationError(RuntimeError):
+    """Raised when deploy pre-checks fail."""
+
+
+def extract_named_items(result: dict, collection_key: str) -> list[dict]:
+    if isinstance(result, list):
+        return result
+
+    if collection_key in result and isinstance(result[collection_key], list):
+        return result[collection_key]
+
+    for value in result.values():
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            if "name" in value[0]:
+                return value
+
+    return []
+
+
+def find_existing_activity_by_name(client: McpClient, activity_name: str) -> dict | None:
+    response = client.call_tool("list_target_activities", {"limit": 200})
+    result = extract_tool_result(response)
+    activities = extract_named_items(result, "activities")
+
+    for activity in activities:
+        if activity.get("name") == activity_name:
+            return activity
+
+    return None
+
+
+def find_existing_offer_by_name(client: McpClient, offer_name: str) -> dict | None:
+    response = client.call_tool(
+        "list_target_offers",
+        {"name": offer_name, "type": "content", "limit": 200},
+    )
+    result = extract_tool_result(response)
+    offers = extract_named_items(result, "offers")
+
+    for offer in offers:
+        if offer.get("name") == offer_name:
+            return offer
+
+    return None
+
+
+def assert_activity_name_available(
+    client: McpClient, activity_name: str, config: dict
+) -> None:
+    if not config.get("validation", {}).get("check_duplicate_activity_name", True):
+        return
+
+    existing = find_existing_activity_by_name(client, activity_name)
+    if existing:
+        raise DeployValidationError(
+            f"Activity '{activity_name}' already exists in Adobe Target "
+            f"(id={existing.get('id')}). Use a different activity_name or set activity_id."
+        )
+
+
+def assert_offer_name_available(
+    client: McpClient, offer_name: str, config: dict, offer_id: int | None
+) -> None:
+    if offer_id:
+        return
+
+    if not config.get("validation", {}).get("check_duplicate_offer_name", True):
+        return
+
+    existing = find_existing_offer_by_name(client, offer_name)
+    if existing:
+        raise DeployValidationError(
+            f"Offer '{offer_name}' already exists in Adobe Target "
+            f"(id={existing.get('id')}). Use a different offer_name or set offer_id."
+        )
+
+
 def load_activity_info(folder: Path, info_file: str) -> dict:
     with (folder / info_file).open(encoding="utf-8") as handle:
         return json.load(handle)
@@ -194,6 +271,39 @@ def build_offer_name(activity_info: dict, variant: str) -> str:
     activity_name = activity_info.get("activity_name", "Offer")
     label = variant.replace("variant_", "Variant ").replace("_", " ").title()
     return f"{activity_name} - {label}"
+
+
+def get_name_prefix(config: dict) -> str:
+    return config.get("deploy_name_prefix", "[GitHub]")
+
+
+def with_name_prefix(name: str, prefix: str) -> str:
+    cleaned = name.strip()
+    if not prefix:
+        return cleaned
+    if cleaned.startswith(prefix):
+        return cleaned
+    return f"{prefix} {cleaned}"
+
+
+def apply_deploy_name_prefix(
+    activity_info: dict, offers: list[dict], config: dict
+) -> tuple[dict, list[dict]]:
+    prefix = get_name_prefix(config)
+    prefixed_activity = dict(activity_info)
+    prefixed_activity["activity_name"] = with_name_prefix(
+        activity_info.get("activity_name", "Activity"), prefix
+    )
+
+    prefixed_offers = []
+    for offer in offers:
+        prefixed_offer = dict(offer)
+        prefixed_offer["offer_name"] = with_name_prefix(
+            offer.get("offer_name", "Offer"), prefix
+        )
+        prefixed_offers.append(prefixed_offer)
+
+    return prefixed_activity, prefixed_offers
 
 
 def resolve_actions(activity_info: dict, config: dict) -> dict:
@@ -254,9 +364,10 @@ def create_target_activity(
 ) -> dict:
     activity_type = map_activity_type(activity_info.get("activity_type", "XT"), type_map)
     tool_name = f"create_{activity_type}_activity"
+    activity_name = activity_info["activity_name"]
 
     params = {
-        "name": activity_info["activity_name"],
+        "name": activity_name,
         "state": "saved",
         "experiences": build_activity_experiences(activity_info),
         "locations": build_activity_locations(activity_info),
@@ -269,9 +380,23 @@ def create_target_activity(
     if description := activity_info.get("activity_description"):
         params["description"] = description
 
-    print(f"Creating Target activity via {tool_name}...")
+    print(f"Creating activity in Adobe Target via {tool_name}...")
     response = client.call_tool(tool_name, params)
-    return extract_tool_result(response)
+    result = extract_tool_result(response)
+
+    activity_id = result.get("id")
+    if activity_id:
+        print(
+            f"SUCCESS: Activity '{activity_name}' created in Adobe Target "
+            f"(id={activity_id}, type={activity_type.upper()})."
+        )
+    else:
+        print(
+            f"WARNING: Activity '{activity_name}' create call completed, "
+            "but no activity id was returned by Adobe Target."
+        )
+
+    return result
 
 
 def deploy_offer(client: McpClient, offer_config: dict, html_content: str) -> dict:
@@ -283,7 +408,7 @@ def deploy_offer(client: McpClient, offer_config: dict, html_content: str) -> di
         if not offer_id:
             raise ValueError(f"offer_id is required to update offer '{offer_name}'")
 
-        print(f"Updating Target offer {offer_id} ({offer_name})...")
+        print(f"Updating offer in Adobe Target (id={offer_id})...")
         response = client.call_tool(
             "update_target_offer",
             {
@@ -292,14 +417,30 @@ def deploy_offer(client: McpClient, offer_config: dict, html_content: str) -> di
                 "content": html_content,
             },
         )
-        return extract_tool_result(response)
+        result = extract_tool_result(response)
+        print(
+            f"SUCCESS: Offer '{offer_name}' updated in Adobe Target (id={offer_id})."
+        )
+        return result
 
-    print(f"Creating Target offer '{offer_name}'...")
+    print(f"Creating offer in Adobe Target...")
     response = client.call_tool(
         "create_target_offer",
         {"name": offer_name, "content": html_content},
     )
-    return extract_tool_result(response)
+    result = extract_tool_result(response)
+    created_offer_id = result.get("id")
+    if created_offer_id:
+        print(
+            f"SUCCESS: Offer '{offer_name}' created in Adobe Target "
+            f"(id={created_offer_id})."
+        )
+    else:
+        print(
+            f"WARNING: Offer '{offer_name}' create call completed, "
+            "but no offer id was returned by Adobe Target."
+        )
+    return result
 
 
 def attach_offer_to_variant(
@@ -367,6 +508,7 @@ def deploy_activity_folder(
     activity_info = load_activity_info(folder, info_file)
     actions = resolve_actions(activity_info, config)
     offers = resolve_offers(folder, activity_info, html_pattern)
+    activity_info, offers = apply_deploy_name_prefix(activity_info, offers, config)
 
     results = {
         "folder": str(folder.relative_to(ROOT)).replace("\\", "/"),
@@ -386,6 +528,9 @@ def deploy_activity_folder(
     )
 
     if should_create_activity:
+        assert_activity_name_available(
+            client, activity_info["activity_name"], config
+        )
         activity_result = create_target_activity(
             client,
             activity_info,
@@ -395,7 +540,11 @@ def deploy_activity_folder(
         created_id = activity_result.get("id")
         if created_id:
             activity_info["activity_id"] = created_id
-            print(f"Created Target activity with id={created_id}")
+    elif activity_info.get("activity_id"):
+        print(
+            f"INFO: Using existing Adobe Target activity "
+            f"'{activity_info['activity_name']}' (id={activity_info['activity_id']})."
+        )
 
     if not offers:
         print("No offers found to deploy.")
@@ -412,6 +561,12 @@ def deploy_activity_folder(
         if not actions.get("push_offer", True):
             continue
 
+        assert_offer_name_available(
+            client,
+            offer_config["offer_name"],
+            config,
+            offer_config.get("offer_id"),
+        )
         offer_result = deploy_offer(client, offer_config, html_content)
         offer_entry = {
             "html_file": html_file,
@@ -439,6 +594,45 @@ def deploy_activity_folder(
         )
 
     return results
+
+
+def print_deploy_summary(all_results: list[dict]) -> None:
+    print("\n=== Adobe Target Deploy Summary ===")
+
+    for result in all_results:
+        folder = result.get("folder", "unknown")
+        activity_name = result.get("activity_name", "unknown")
+        print(f"\nFolder: {folder}")
+        print(f"Activity: {activity_name}")
+
+        activity_create = result.get("activity_create_result") or {}
+        activity_id = activity_create.get("id")
+        if activity_id:
+            print(
+                f"  - Activity created in Adobe Target: "
+                f"'{activity_name}' (id={activity_id})"
+            )
+        else:
+            print("  - Activity not created in this deploy run.")
+
+        offers = result.get("offers", [])
+        if not offers:
+            print("  - No offers deployed.")
+            continue
+
+        for offer in offers:
+            offer_result = offer.get("offer_result") or {}
+            offer_id = offer_result.get("id")
+            html_file = offer.get("html_file", "unknown")
+            if offer_id:
+                print(
+                    f"  - Offer deployed from '{html_file}' "
+                    f"in Adobe Target (id={offer_id})"
+                )
+            else:
+                print(f"  - Offer processed from '{html_file}'.")
+
+    print("\nDeployment to Adobe Target MCP completed successfully.")
 
 
 def main() -> int:
@@ -496,14 +690,19 @@ def main() -> int:
             print(refresh_error, file=sys.stderr)
             return 1
 
-    all_results = [
-        deploy_activity_folder(client, folder, config, is_new_folder=True)
-        for folder in activity_folders
-    ]
+    all_results = []
+    try:
+        for folder in activity_folders:
+            all_results.append(
+                deploy_activity_folder(client, folder, config, is_new_folder=True)
+            )
+    except DeployValidationError as error:
+        print(f"Deploy validation failed: {error}", file=sys.stderr)
+        return 1
 
-    print("\nDeployment summary:")
+    print_deploy_summary(all_results)
+    print("\nDeployment details:")
     print(json.dumps(all_results, indent=2))
-    print("Deployment to Adobe Target MCP completed.")
     return 0
 
 

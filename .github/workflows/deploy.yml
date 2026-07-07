@@ -22,11 +22,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Node dependencies
+        run: npm install
+
       - name: Check for newly created activity folder
         env:
           GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python scripts/check_new_activity_folder.py
+
+      - name: Validate HTML, CSS, JavaScript, and formatting
+        env:
+          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/validate_activity_code.py
 
   deploy:
     name: Deploy to Adobe Target MCP

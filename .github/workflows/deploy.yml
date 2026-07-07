@@ -1,0 +1,33 @@
+name: Deploy to Adobe Target MCP
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-target-mcp
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Push HTML to Adobe Target MCP
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Deploy HTML offer via MCP
+        env:
+          MCP_SERVER_URL: https://targetmcp.adobe.io/mcp
+          ADOBE_ACCESS_TOKEN: ${{ secrets.ADOBE_ACCESS_TOKEN }}
+        run: python scripts/deploy_to_target_mcp.py

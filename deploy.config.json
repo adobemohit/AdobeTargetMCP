@@ -1,0 +1,27 @@
+{
+  "description": "Global deploy settings. Activities are auto-discovered from any folder containing activity-info.json.",
+  "mcp_server_url": "https://targetmcp.adobe.io/mcp",
+  "discovery": {
+    "info_file": "activity-info.json",
+    "html_pattern": "*.html",
+    "exclude_dirs": [".github", "scripts", ".git", "node_modules", "css", "js", "__pycache__"]
+  },
+  "default_actions": {
+    "push_offer": true,
+    "attach_offer_to_variant": true,
+    "sync_activity_state": false,
+    "create_activity_if_missing": false
+  },
+  "status_map": {
+    "active": "approved",
+    "inactive": "deactivated",
+    "paused": "paused",
+    "draft": "saved",
+    "saved": "saved"
+  },
+  "activity_type_map": {
+    "AB": "ab",
+    "XT": "xt",
+    "ABT": "abt"
+  }
+}

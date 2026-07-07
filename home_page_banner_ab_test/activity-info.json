@@ -1,0 +1,26 @@
+{
+    "activity_id": 0,
+    "activity_name": "Home Page Banner AB Test",
+    "activity_description": "This is a test activity to test the home page banner AB test",
+    "activity_status": "active",
+    "activity_start_date": "2026-01-01",
+    "activity_end_date": "2026-01-01",
+    "activity_type": "XT",
+    "activity_location": "home",
+    "activity_target": "users",
+    "variants": [
+        {
+            "variant": "variant_a",
+            "html_file": "home_page_benner_exp_a.html",
+            "offer_name": "Home Page Banner - Variant A",
+            "offer_id": null,
+            "mode": "create_or_update"
+        }
+    ],
+    "actions": {
+        "push_offer": true,
+        "attach_offer_to_variant": true,
+        "sync_activity_state": false,
+        "create_activity_if_missing": false
+    }
+}

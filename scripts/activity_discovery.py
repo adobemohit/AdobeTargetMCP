@@ -104,6 +104,13 @@ def get_deployable_activity_changes(config: dict) -> list[dict]:
     all_folders = discover_activity_folders(config)
     before_sha = os.environ.get("GITHUB_BEFORE_SHA", "").strip()
     after_sha = os.environ.get("GITHUB_SHA", "").strip()
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+
+    if event_name == "workflow_dispatch":
+        print("Manual workflow dispatch. Deploying all discovered activity folders.")
+        if "create" not in allowed_modes:
+            return []
+        return [{"folder": folder, "mode": "create"} for folder in all_folders]
 
     if not after_sha:
         print("GITHUB_SHA not set. Deploying all discovered activity folders as create.")

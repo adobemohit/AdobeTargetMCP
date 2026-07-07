@@ -16,7 +16,6 @@ concurrency:
 jobs:
   validate-new-activity:
     name: Validate activity changes
-    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,24 +39,36 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Prepare comparison SHAs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "GITHUB_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+            echo "GITHUB_BEFORE_SHA=" >> $GITHUB_ENV
+            echo "Manual deploy: validating and deploying all activity folders."
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "GITHUB_SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+            echo "GITHUB_BEFORE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
+          else
+            echo "GITHUB_SHA=${{ github.sha }}" >> $GITHUB_ENV
+            echo "GITHUB_BEFORE_SHA=${{ github.event.before }}" >> $GITHUB_ENV
+          fi
+
       - name: Check for activity create or update changes
         env:
-          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: python scripts/check_new_activity_folder.py
 
       - name: Validate HTML, CSS, JavaScript, and formatting
         env:
-          GITHUB_BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: python scripts/validate_activity_code.py
 
   deploy:
     name: Deploy to Adobe Target MCP
     needs: validate-new-activity
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && needs.validate-new-activity.result == 'success')
+      needs.validate-new-activity.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -78,11 +89,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "GITHUB_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
-            if git rev-parse HEAD^ >/dev/null 2>&1; then
-              echo "GITHUB_BEFORE_SHA=$(git rev-parse HEAD^)" >> $GITHUB_ENV
-            else
-              echo "GITHUB_BEFORE_SHA=" >> $GITHUB_ENV
-            fi
+            echo "GITHUB_BEFORE_SHA=" >> $GITHUB_ENV
+            echo "Manual deploy: deploying all activity folders to Adobe Target."
           else
             echo "GITHUB_SHA=${{ github.sha }}" >> $GITHUB_ENV
             echo "GITHUB_BEFORE_SHA=${{ github.event.before }}" >> $GITHUB_ENV
@@ -94,6 +102,7 @@ jobs:
           ADOBE_ACCESS_TOKEN: ${{ secrets.ADOBE_ACCESS_TOKEN }}
           ADOBE_CLIENT_ID: ${{ secrets.ADOBE_CLIENT_ID }}
           ADOBE_CLIENT_SECRET: ${{ secrets.ADOBE_CLIENT_SECRET }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_BEFORE_SHA: ${{ env.GITHUB_BEFORE_SHA }}
           GITHUB_SHA: ${{ env.GITHUB_SHA }}
           GITHUB_ACTOR: ${{ github.actor }}

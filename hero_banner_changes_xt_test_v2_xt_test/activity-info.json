@@ -1,5 +1,5 @@
 {
-  "activity_id": 0,
+  "activity_id": 338455,
   "activity_name": "Hero Banner Changes XT Test v2",
   "activity_description": "Sample XT activity to test hero banner content changes on the home page",
   "activity_status": "inactive",
@@ -13,7 +13,7 @@
       "variant": "variant_a",
       "html_file": "hero_banner_changes_xt_test_v2_xt_test_exp_a.html",
       "offer_name": "Hero Banner Changes - Variant A",
-      "offer_id": null,
+      "offer_id": 880028,
       "mode": "create_or_update"
     }
   ],
@@ -21,6 +21,6 @@
     "push_offer": true,
     "attach_offer_to_variant": true,
     "sync_activity_state": false,
-    "create_activity_if_missing": true
+    "create_activity_if_missing": false
   }
 }

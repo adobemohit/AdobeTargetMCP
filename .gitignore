@@ -1,4 +1,25 @@
+# Dependencies & build
 node_modules/
-package-lock.json
+.next/
+dist/
+build/
+*.log
+.DS_Store
+
+# Secrets & local app data
+.env
+.env.*
+!.env.example
+.atgitops/
+data/
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Editor
+.idea/
+.vscode/
+*.swp

@@ -37,7 +37,7 @@ def fetch_access_token_from_client_credentials(config: dict) -> str:
     )
     scopes = auth_config.get("scopes", DEFAULT_ADOBE_SCOPES)
 
-    print("Fetching Adobe access token using client credentials...")
+    print("Fetching Adobe access token using client credentials...", file=sys.stderr)
     with httpx.Client(timeout=60.0) as client:
         response = client.post(
             token_url,
@@ -57,7 +57,7 @@ def fetch_access_token_from_client_credentials(config: dict) -> str:
         raise RuntimeError("Adobe IMS response did not include access_token")
 
     expires_in = payload.get("expires_in", "unknown")
-    print(f"Adobe access token fetched successfully (expires_in={expires_in}).")
+    print(f"Adobe access token fetched successfully (expires_in={expires_in}).", file=sys.stderr)
     return access_token
 
 
@@ -67,7 +67,7 @@ def resolve_access_token(config: dict, force_refresh: bool = False) -> str:
 
     access_token = os.environ.get("ADOBE_ACCESS_TOKEN", "").strip()
     if access_token:
-        print("Using ADOBE_ACCESS_TOKEN from GitHub Secrets.")
+        print("Using ADOBE_ACCESS_TOKEN from environment.", file=sys.stderr)
         return access_token
 
     return fetch_access_token_from_client_credentials(config)
@@ -209,6 +209,116 @@ def find_existing_offer_by_name(client: McpClient, offer_name: str) -> dict | No
             return offer
 
     return None
+
+
+ACTIVITY_GET_TOOLS = {
+    "ab": "get_ab_activity",
+    "xt": "get_xt_activity",
+    "abt": "get_abt_activity",
+}
+
+
+def extract_offer_ids_from_activity_detail(detail: dict) -> list[int]:
+    offer_ids: list[int] = []
+
+    def add_offer_id(value: object) -> None:
+        if value is None:
+            return
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return
+        if numeric > 0 and numeric not in offer_ids:
+            offer_ids.append(numeric)
+
+    for key in ("experiences", "options", "variants"):
+        entries = detail.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            add_offer_id(
+                entry.get("offerId")
+                or entry.get("offer_id")
+                or entry.get("defaultOfferId")
+            )
+            offer = entry.get("offer")
+            if isinstance(offer, dict):
+                add_offer_id(offer.get("id"))
+
+    return offer_ids
+
+
+def resolve_missing_target_ids(
+    client: McpClient,
+    activity_info: dict,
+    offers: list[dict],
+    config: dict,
+) -> None:
+    type_map = config.get("activity_type_map", {})
+
+    if not activity_info.get("activity_id"):
+        activity_name = str(activity_info.get("activity_name", ""))
+        existing = find_existing_activity_by_name(client, activity_name)
+        if not existing:
+            search_term = activity_name.split("]")[-1].strip() if "]" in activity_name else activity_name
+            response = client.call_tool(
+                "list_target_activities",
+                {"limit": 200, "name_contains": search_term[:60]},
+            )
+            result = extract_tool_result(response)
+            activities = extract_named_items(result, "activities")
+            lowered = search_term.lower()
+            for activity in activities:
+                target_name = str(activity.get("name", "")).lower()
+                if lowered in target_name or target_name in lowered:
+                    existing = activity
+                    break
+
+        if existing and existing.get("id"):
+            activity_info["activity_id"] = int(existing["id"])
+            print(
+                "INFO: Resolved activity_id="
+                f"{activity_info['activity_id']} from Target for update deploy."
+            )
+
+    activity_id = activity_info.get("activity_id")
+    offer_ids_from_activity: list[int] = []
+    if activity_id:
+        activity_type = map_activity_type(
+            activity_info.get("activity_type", "XT"),
+            type_map,
+        )
+        get_tool = ACTIVITY_GET_TOOLS.get(activity_type, "get_xt_activity")
+        try:
+            response = client.call_tool(get_tool, {"activity_id": activity_id})
+            detail = extract_tool_result(response)
+            offer_ids_from_activity = extract_offer_ids_from_activity_detail(detail)
+        except Exception as error:
+            print(f"WARNING: Could not fetch activity detail for offer IDs: {error}")
+
+    for offer in offers:
+        if offer.get("offer_id"):
+            continue
+
+        offer_name = str(offer.get("offer_name", ""))
+        if offer_name:
+            existing_offer = find_existing_offer_by_name(client, offer_name)
+            if existing_offer and existing_offer.get("id"):
+                offer["offer_id"] = int(existing_offer["id"])
+                print(
+                    f"INFO: Resolved offer_id={offer['offer_id']} "
+                    f"for '{offer_name}' from Target."
+                )
+                continue
+
+        if offer_ids_from_activity:
+            offer["offer_id"] = offer_ids_from_activity[0]
+            print(
+                f"INFO: Resolved offer_id={offer['offer_id']} "
+                "from get_activity response."
+            )
 
 
 def assert_activity_name_available(
@@ -553,6 +663,7 @@ def deploy_activity_folder(
     print(f"\nDeploying activity folder ({deploy_mode}): {results['folder']}")
 
     if deploy_mode == "update":
+        resolve_missing_target_ids(client, activity_info, offers, config)
         validate_update_requirements(activity_info, offers, folder)
         for offer in offers:
             offer["mode"] = "update"
